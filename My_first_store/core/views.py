@@ -1,12 +1,14 @@
+from . models import Basket, BasketItem
+from . serializers import BasketSerializer, BasketItemSerializer
 from django.shortcuts import render
-from models import User
+from . models import User
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from .models import (
+from . models import (
     Supplier, Category, Product, Parameter, ProductParameter,
     DeliveryAddress, Order, OrderItem
 )
-from .serializers import (
+from . serializers import (
     SupplierSerializer, CategorySerializer, ProductSerializer,
     ParameterSerializer, ProductParameterSerializer,
     DeliveryAddressSerializer, OrderSerializer, OrderItemSerializer,
@@ -120,3 +122,49 @@ def login_view(request):
 @permission_classes([IsAuthenticated])
 def profile_view(request):
     return Response(UserSerializer(request.user).data)
+
+
+#логика работы с корзиной
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def basket_view(request):
+    basket, created = Basket.objects.get_or_create(user=request.user)
+    serializer = BasketSerializer(basket)
+    return Response(serializer.data)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def basket_add_view(request):
+    product_id = request.data.get('product_id')
+    quantity = request.data.get('quantity', 1)
+
+    try:
+        product = Product.objects.get(id=product_id)
+    except Product.DoesNotExist:
+        return Response({'error': 'Товар не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+    basket, created = Basket.objects.get_or_create(user=request.user)
+    basket_item, created = BasketItem.objects.get_or_create(
+        basket=basket,
+        product=product,
+        defaults={'quantity': quantity}
+    )
+
+    if not created:
+        basket_item.quantity += int(quantity)
+        basket_item.save()
+
+    serializer = BasketItemSerializer(basket_item)
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def basket_remove_view(request, item_id):
+    try:
+        basket_item = BasketItem.objects.get(id=item_id, basket__user=request.user)
+    except BasketItem.DoesNotExist:
+        return Response({'error': 'Товар не найден в корзине'}, status=status.HTTP_404_NOT_FOUND)
+
+    basket_item.delete()
+    return Response({'message': 'Товар удалён из корзины'}, status=status.HTTP_204_NO_CONTENT)
+

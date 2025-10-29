@@ -1,10 +1,12 @@
 # myapp/serializers.py
 from rest_framework import serializers
-from django.contrib.auth.models import User
-from .models import (
+
+from .models import User  
+from . models import (
     Supplier, Category, Product, Parameter, ProductParameter,
     DeliveryAddress, Order, OrderItem
 )
+from . models import Basket, BasketItem
 
 # Сериализаторы для вспомогательных моделей
 
@@ -82,3 +84,26 @@ class UserSerializer(serializers.ModelSerializer):
         user.set_password(password)
         user.save()
         return user
+    
+# модкль корзины 
+class BasketItemSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)  # Выводим полную информацию о товаре
+
+    class Meta:
+        model = BasketItem
+        fields = ['id', 'product', 'quantity']
+
+class BasketSerializer(serializers.ModelSerializer):
+    items = BasketItemSerializer(source='items.all', many=True, read_only=True)  # Все товары в корзине
+    total_quantity = serializers.SerializerMethodField()
+    total_price = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Basket
+        fields = ['id', 'items', 'total_quantity', 'total_price', 'created_at', 'updated_at']
+
+    def get_total_quantity(self, obj):
+        return sum(item.quantity for item in obj.items.all())
+
+    def get_total_price(self, obj):
+        return sum(item.product.price * item.quantity for item in obj.items.all())

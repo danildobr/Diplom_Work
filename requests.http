@@ -1,0 +1,80 @@
+### === Настройки ===
+@host = http://127.0.0.1:8000
+@contentType = application/json
+
+### === Регистрация пользователя ===
+POST {{host}}/api/auth/register/
+Content-Type: {{contentType}}
+
+{
+  "username": "testuser",
+  "email": "test@example.com",
+  "password": "12345678",
+  "first_name": "Test",
+  "last_name": "User",
+  "user_type": "client"
+}
+
+### === Логин ===
+POST {{host}}/api/auth/login/
+Content-Type: {{contentType}}
+
+{
+  "username": "testuser",
+  "password": "12345678"
+}
+
+# c59107bec47f61a83b1803bfcff40b52f2ece637
+### === Получение профиля (требует токен) ===
+GET {{host}}/api/auth/profile/
+Authorization: Token c59107bec47f61a83b1803bfcff40b52f2ece637
+
+### === Получение списка товаров ===
+GET {{host}}/api/products/
+Authorization: Token c59107bec47f61a83b1803bfcff40b52f2ece637
+
+### === Получение списка категорий ===
+GET {{host}}/api/categories/
+Authorization: Token c59107bec47f61a83b1803bfcff40b52f2ece637
+
+### === Получение содержимого корзины (требует токен) ===
+GET {{host}}/api/basket/
+Authorization: Token c59107bec47f61a83b1803bfcff40b52f2ece637
+
+### === Добавление товара в корзину (требует токен) ===
+POST {{host}}/api/basket/add/
+Content-Type: {{contentType}}
+Authorization: Token c59107bec47f61a83b1803bfcff40b52f2ece637
+
+{
+  "product_id": 1,
+  "quantity": 2
+}
+
+### === Оформление заказа (требует токен) ===
+POST {{host}}/api/orders/create/
+Content-Type: {{contentType}}
+Authorization: Token <вставь_токен_из_ответа_логина_сюда>
+
+{
+  "delivery_address_id": 1
+}
+
+### === Получение списка заказов (требует токен) ===
+GET {{host}}/api/orders/
+Authorization: Token <вставь_токен_из_ответа_логина_сюда>
+
+### === Получение списка поставщиков (публичный) ===
+GET {{host}}/api/suppliers/
+
+### === Добавление адреса доставки (требует токен) ===
+POST {{host}}/api/delivery-addresses/
+Content-Type: {{contentType}}
+Authorization: Token <вставь_токен_из_ответа_логина_сюда>
+
+{
+  "city": "Москва",
+  "street": "Тверская",
+  "house": "15",
+  "apartment": "102"
+}
