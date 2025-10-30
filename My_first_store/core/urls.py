@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from . import views  # <-- Относительный импорт
+from . import views  
 
 router = DefaultRouter()
 router.register(r'suppliers', views.SupplierViewSet)
@@ -16,12 +16,11 @@ router.register(r'users', views.UserViewSet)
 urlpatterns = [
     path('api/auth/register/', views.register_view, name='register'),
     path('api/auth/login/', views.login_view, name='login'),
-    # path('api/auth/logout/', views.logout_view, name='logout'),
     path('api/auth/profile/', views.profile_view, name='profile'),
-    path('api/', include(router.urls)),
     path('api/basket/', views.basket_view, name='basket'),
     path('api/basket/add/', views.basket_add_view, name='basket-add'),
     path('api/basket/remove/<int:item_id>/', views.basket_remove_view, name='basket-remove'),
-
+    path('api/orders/create/', views.order_create_view, name='order-create'),
+    path('api/basket/update/<int:item_id>/', views.basket_update_quantity_view, name='basket-update-quantity'),
     path('api/', include(router.urls)),
 ]

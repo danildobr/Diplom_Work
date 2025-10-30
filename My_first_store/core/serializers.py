@@ -1,6 +1,6 @@
 # myapp/serializers.py
 from rest_framework import serializers
-
+from django.core.exceptions import ValidationError
 from .models import User  
 from . models import (
     Supplier, Category, Product, Parameter, ProductParameter,
@@ -47,10 +47,36 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class DeliveryAddressSerializer(serializers.ModelSerializer):
-    '''Сериализует адрес доставки.'''
     class Meta:
         model = DeliveryAddress
         fields = '__all__'
+
+    def validate(self, attrs):
+        # Получаем пользователя из контекста (передаётся из ViewSet)
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            user = request.user
+        else:
+            # Если контекста нет, значит, это не через API вызывается — можно пропустить
+            # или вызвать ValidationError
+            raise ValidationError("Контекст запроса с пользователем обязателен.")
+
+        # Проверяем, существует ли уже такой адрес у пользователя
+        city = attrs.get('city')
+        street = attrs.get('street')
+        house = attrs.get('house')
+        apartment = attrs.get('apartment')
+
+        if DeliveryAddress.objects.filter(
+            user=user,
+            city=city,
+            street=street,
+            house=house,
+            apartment=apartment
+        ).exists():
+            raise ValidationError('Адрес доставки с такими параметрами уже существует для этого пользователя.')
+        return attrs
+
 
 class OrderItemSerializer(serializers.ModelSerializer):
     '''Сериализует один товар в заказе.'''

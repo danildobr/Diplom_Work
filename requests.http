@@ -7,54 +7,67 @@ POST {{host}}/api/auth/register/
 Content-Type: {{contentType}}
 
 {
-  "username": "testuser",
-  "email": "test@example.com",
-  "password": "12345678",
-  "first_name": "Test",
-  "last_name": "User",
+  "username": "Данил",
+  "email": "danil@mail.ru",
+  "password": "123",
+  "first_name": "Danil",
+  "last_name": "Dobr",
   "user_type": "client"
 }
 
+# данил ea3f6a32efa7007801b3bf1f7fbb5f672a0277ce
+# test c59107bec47f61a83b1803bfcff40b52f2ece637
 ### === Логин ===
 POST {{host}}/api/auth/login/
 Content-Type: {{contentType}}
 
 {
-  "username": "testuser",
-  "password": "12345678"
+  "username": "Данил",
+  "password": "123"
 }
 
-# c59107bec47f61a83b1803bfcff40b52f2ece637
+### === Добавление адреса доставки (требует токен) ===
+POST {{host}}/api/delivery-addresses/
+Content-Type: {{contentType}}
+Authorization: Token c59107bec47f61a83b1803bfcff40b52f2ece637
+# Authorization: Token ea3f6a32efa7007801b3bf1f7fbb5f672a0277ce
+
+{
+  "user": 1,
+  "city": "Губкинский",
+  "street": "Александра Пушкина ",
+  "house": "14",
+  "apartment": "10"
+}
+
 ### === Получение профиля (требует токен) ===
 GET {{host}}/api/auth/profile/
-Authorization: Token c59107bec47f61a83b1803bfcff40b52f2ece637
+Authorization: Token ea3f6a32efa7007801b3bf1f7fbb5f672a0277ce
 
 ### === Получение списка товаров ===
 GET {{host}}/api/products/
-Authorization: Token c59107bec47f61a83b1803bfcff40b52f2ece637
 
 ### === Получение списка категорий ===
 GET {{host}}/api/categories/
-Authorization: Token c59107bec47f61a83b1803bfcff40b52f2ece637
 
 ### === Получение содержимого корзины (требует токен) ===
 GET {{host}}/api/basket/
-Authorization: Token c59107bec47f61a83b1803bfcff40b52f2ece637
+Authorization: Token ea3f6a32efa7007801b3bf1f7fbb5f672a0277ce
 
 ### === Добавление товара в корзину (требует токен) ===
 POST {{host}}/api/basket/add/
 Content-Type: {{contentType}}
-Authorization: Token c59107bec47f61a83b1803bfcff40b52f2ece637
+Authorization: Token ea3f6a32efa7007801b3bf1f7fbb5f672a0277ce
 
 {
-  "product_id": 1,
-  "quantity": 2
+  "product_id": 3,
+  "quantity": 20
 }
 
 ### === Оформление заказа (требует токен) ===
 POST {{host}}/api/orders/create/
 Content-Type: {{contentType}}
-Authorization: Token <вставь_токен_из_ответа_логина_сюда>
+Authorization: Token ea3f6a32efa7007801b3bf1f7fbb5f672a0277ce
 
 {
   "delivery_address_id": 1
@@ -62,19 +75,20 @@ Authorization: Token <вставь_токен_из_ответа_логина_с�
 
 ### === Получение списка заказов (требует токен) ===
 GET {{host}}/api/orders/
-Authorization: Token <вставь_токен_из_ответа_логина_сюда>
+Authorization: Token ea3f6a32efa7007801b3bf1f7fbb5f672a0277ce
 
 ### === Получение списка поставщиков (публичный) ===
 GET {{host}}/api/suppliers/
 
-### === Добавление адреса доставки (требует токен) ===
-POST {{host}}/api/delivery-addresses/
+### === обновление колличества товара 
+PUT {{host}}/api/basket/update/10/
 Content-Type: {{contentType}}
-Authorization: Token <вставь_токен_из_ответа_логина_сюда>
+Authorization: Token ea3f6a32efa7007801b3bf1f7fbb5f672a0277ce
 
 {
-  "city": "Москва",
-  "street": "Тверская",
-  "house": "15",
-  "apartment": "102"
+  "quantity": 5
 }
+###=== удаление из корзины  
+
+DELETE {{host}}/api/basket/remove/9/
+Authorization: Token ea3f6a32efa7007801b3bf1f7fbb5f672a0277ce
