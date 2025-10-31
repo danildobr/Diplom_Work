@@ -1,5 +1,5 @@
 data = {
-  "shop": "Связной",
+  "shop": "Юля",
   "categories": [
     {
       "id": 224,

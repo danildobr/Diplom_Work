@@ -8,6 +8,8 @@ from . models import (
     Supplier, Category, Product, Parameter, ProductParameter,
     DeliveryAddress, Order, OrderItem
 )
+from django.contrib.auth.models import Group 
+from .models import ORDER_STATUS_CHOICES
 from . serializers import (
     SupplierSerializer, CategorySerializer, ProductSerializer,
     ParameterSerializer, ProductParameterSerializer,
@@ -19,7 +21,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import authenticate, login, logout
-
+from django.db import transaction 
 
 
 
@@ -175,7 +177,6 @@ def basket_remove_view(request, item_id):
 
     basket_item.delete()
     return Response({'message': 'Товар удалён из корзины'}, status=status.HTTP_204_NO_CONTENT)
-
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def order_create_view(request):
@@ -185,10 +186,23 @@ def order_create_view(request):
     except Basket.DoesNotExist:
         return Response({'error': 'Корзина пуста'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Проверяем, есть ли товары в корзине
     basket_items = basket.items.all()
     if not basket_items.exists():
         return Response({'error': 'Корзина пуста'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Проверяем, есть ли товары в корзине
+    for item in basket_items:
+        # <-- Добавим проверку -->
+        if not item.product.supplier.accepts_orders:
+            return Response({
+                'error': f'Поставщик "{item.product.supplier.name}" не принимает заказы. Невозможно оформить заказ с товаром "{item.product.name}".'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Проверяем количество товара на складе
+        if item.product.quantity < item.quantity:
+            return Response({
+                'error': f'Недостаточно товара "{item.product.name}" на складе. Запрошено: {item.quantity}, доступно: {item.product.quantity}'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
     # Получаем адрес доставки из тела запроса
     address_id = request.data.get('delivery_address_id')
@@ -200,13 +214,6 @@ def order_create_view(request):
         address = DeliveryAddress.objects.get(id=address_id, user=request.user)
     except DeliveryAddress.DoesNotExist:
         return Response({'error': 'Адрес доставки не найден или не принадлежит пользователю'}, status=status.HTTP_400_BAD_REQUEST)
-
-    # Проверяем количество товаров в корзине
-    for item in basket_items:
-        if item.product.quantity < item.quantity:
-            return Response({
-                'error': f'Недостаточно товара "{item.product.name}" на складе. Запрошено: {item.quantity}, доступно: {item.product.quantity}'
-            }, status=status.HTTP_400_BAD_REQUEST)
 
     # Если всё ок, создаём заказ
     order = Order.objects.create(user=request.user, address=address, status='new')
@@ -230,6 +237,7 @@ def order_create_view(request):
     serializer = OrderSerializer(order)
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated])
 def basket_update_quantity_view(request, item_id):
@@ -247,8 +255,8 @@ def basket_update_quantity_view(request, item_id):
         new_quantity = int(new_quantity)
         if new_quantity <= 0:
             # Если количество <= 0, можно автоматически удалить
-            basket_item.delete()
-            return Response({'message': 'Товар удалён из корзины (количество <= 0)'}, status=status.HTTP_204_NO_CONTENT)
+                basket_item.delete()
+                return Response({'message': 'Товар удалён из корзины'}, status=status.HTTP_200_OK)
     except ValueError:
         return Response({'error': 'Количество должно быть числом'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -262,4 +270,163 @@ def basket_update_quantity_view(request, item_id):
     basket_item.save()
 
     serializer = BasketItemSerializer(basket_item)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+# API-эндпоинт, чтобы поставщик мог изменить это поле через API.
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def toggle_supplier_accepts_orders(request):
+    try:
+        supplier = request.user.supplier_profile
+    except Supplier.DoesNotExist:
+        return Response({'error': 'Пользователь не является поставщиком'}, status=status.HTTP_403_FORBIDDEN)
+
+    new_status = request.data.get('accepts_orders')
+    if new_status is None:
+        return Response({'error': 'Не указано новое состояние'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not isinstance(new_status, bool):
+        return Response({'error': 'Значение должно быть true или false'}, status=status.HTTP_400_BAD_REQUEST)
+
+    supplier.accepts_orders = new_status
+    supplier.save()
+
+    return Response({'accepts_orders': supplier.accepts_orders}, status=status.HTTP_200_OK)
+
+
+# Получать список оформленных заказов 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def supplier_orders_view(request):
+    # Проверяем, является ли пользователь поставщиком
+    try:
+        supplier = request.user.supplier_profile
+    except Supplier.DoesNotExist:
+        return Response({'error': 'Пользователь не является поставщиком'}, status=status.HTTP_403_FORBIDDEN)
+
+    # Находим заказы, в которых есть товары от этого поставщика
+    orders = Order.objects.filter(items__product__supplier=supplier).distinct()
+
+    # Сериализуем заказы
+    serializer = OrderSerializer(orders, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+# API-эндпоинт, через который поставщик сможет загружать/обновлять свои товары в базу данных через API,
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def supplier_upload_price_view(request):
+    # Проверяем, является ли пользователь поставщиком
+    try:
+        supplier = request.user.supplier_profile
+    except Supplier.DoesNotExist:
+        return Response({'error': 'Пользователь не является поставщиком'}, status=status.HTTP_403_FORBIDDEN)
+
+    # Получаем данные из тела запроса
+    data = request.data
+
+    # Проверяем структуру данных
+    if not isinstance(data, dict) or 'goods' not in data:
+        return Response({'error': 'Неверный формат данных. Ожидается объект с полем "goods".'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Начинаем транзакцию для атомарности операций
+    with transaction.atomic():
+        # Создаём/обновим категории
+        category_map = {}
+        for cat_data in data.get('categories', []):
+            cat, _ = Category.objects.get_or_create(
+                id=cat_data['id'],
+                defaults={'name': cat_data['name']}
+            )
+            category_map[cat_data['id']] = cat
+
+        # Создаём/обновим параметры
+        parameter_map = {}
+        for good in data['goods']:
+            for param_name in good['parameters']:
+                param, _ = Parameter.objects.get_or_create(name=param_name)
+                parameter_map[param_name] = param
+
+        # Обрабатываем товары
+        created_count = 0
+        updated_count = 0
+        for good in data['goods']:
+            category = category_map.get(good['category'])
+            if not category:
+                return Response({'error': f'Категория с ID {good["category"]} не найдена.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Используем external_id и supplier для уникальности
+            product, created = Product.objects.get_or_create(
+                external_id=good['id'],
+                supplier=supplier,
+                defaults={
+                    'name': good['name'],
+                    'category': category,
+                    'price': good['price'],
+                    'quantity': good['quantity']
+                }
+            )
+
+            if not created:
+                # Если товар уже был, обновим поля
+                product.name = good['name']
+                product.category = category
+                product.price = good['price']
+                product.quantity = good['quantity']
+                product.save()
+                updated_count += 1
+            else:
+                created_count += 1
+
+            for param_name, param_value in good['parameters'].items():
+                param = parameter_map[param_name]
+                ProductParameter.objects.update_or_create(
+                    product=product,
+                    parameter=param,
+                    defaults={'value': str(param_value)}
+                )
+    
+    return Response({
+            'message': 'Прайс-лист успешно загружен',
+            'created': created_count,
+            'updated': updated_count
+        }, status=status.HTTP_201_CREATED)
+    
+    
+### === Изменеие статуса заказа только Админы могут
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def update_order_status_view(request, order_id):
+    # Проверяем, является ли пользователь администратором
+    # (Можно проверить по группе или по is_staff)
+    if not (request.user.is_staff or request.user.is_superuser):
+        # Или проверить по группе:
+        # if not request.user.groups.filter(name='Администраторы').exists():
+        return Response({'error': 'Недостаточно прав для изменения статуса заказа'}, status=status.HTTP_403_FORBIDDEN)
+
+    # Получаем новый статус из тела запроса
+    new_status = request.data.get('status')
+
+    if new_status is None:
+        return Response({'error': 'Не указан новый статус'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Проверим, что новый статус входит в допустимые
+    valid_statuses = [choice[0] for choice in ORDER_STATUS_CHOICES]
+    if new_status not in valid_statuses:
+        return Response({'error': f'Недопустимый статус. Допустимые: {valid_statuses}'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        order = Order.objects.get(id=order_id)
+    except Order.DoesNotExist:
+        return Response({'error': 'Заказ не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Изменяем статус
+    order.status = new_status
+    order.save()
+
+    # Сериализуем и возвращаем обновлённый заказ
+    serializer = OrderSerializer(order)
     return Response(serializer.data, status=status.HTTP_200_OK)
