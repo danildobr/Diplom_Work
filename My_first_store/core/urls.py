@@ -26,5 +26,9 @@ urlpatterns = [
     path('api/supplier/orders/', views.supplier_orders_view, name='supplier-orders'),
     path('api/supplier/upload-price/', views.supplier_upload_price_view, name='supplier-upload-price'),
     path('api/orders/<int:order_id>/status/', views.update_order_status_view, name='update-order-status'),
+    path('api/orders/confirm/', views.confirm_order_view, name='order-confirm'), 
+    path('api/auth/password-reset/', views.PasswordResetRequestView.as_view(), name='password-reset-request'),
+    path('api/auth/password-reset-confirm/', views.PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
+    
     path('api/', include(router.urls)),
 ]

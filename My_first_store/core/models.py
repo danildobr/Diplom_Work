@@ -1,7 +1,5 @@
+from django.utils import timezone
 from django.db import models
-
-# Create your models here.
-# models.py
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator
@@ -136,3 +134,21 @@ class BasketItem(models.Model):
 
     def __str__(self):
         return f"{self.quantity}x {self.product.name}"
+    
+
+
+class OrderConfirmationCode(models.Model):
+    order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name='confirmation_code')
+    code = models.CharField(max_length=6)  # Простой 6-значный код
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    def __str__(self):
+        return f'Код для заказа {self.order.id} (до {self.expires_at})'
+
+    class Meta:
+        verbose_name = "Код подтверждения заказа"
+        verbose_name_plural = "Коды подтверждения заказов"

@@ -1,13 +1,26 @@
+from django.views import View
+import json
+from django.http import JsonResponse
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
 from . models import Basket, BasketItem
+from django.utils import timezone
+from datetime import timedelta
 from . serializers import BasketSerializer, BasketItemSerializer
 from django.shortcuts import render
 from . models import User
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from . models import (
-    Supplier, Category, Product, Parameter, ProductParameter,
+    Supplier, OrderConfirmationCode, Category, Product, Parameter, ProductParameter,
     DeliveryAddress, Order, OrderItem
 )
+from django.utils.html import strip_tags
+import random
+import string
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
 from django.contrib.auth.models import Group 
 from .models import ORDER_STATUS_CHOICES
 from . serializers import (
@@ -177,6 +190,9 @@ def basket_remove_view(request, item_id):
 
     basket_item.delete()
     return Response({'message': 'Товар удалён из корзины'}, status=status.HTTP_204_NO_CONTENT)
+
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def order_create_view(request):
@@ -191,8 +207,8 @@ def order_create_view(request):
         return Response({'error': 'Корзина пуста'}, status=status.HTTP_400_BAD_REQUEST)
 
     # Проверяем, есть ли товары в корзине
+    # Проверяем, принимает ли поставщик заказы
     for item in basket_items:
-        # <-- Добавим проверку -->
         if not item.product.supplier.accepts_orders:
             return Response({
                 'error': f'Поставщик "{item.product.supplier.name}" не принимает заказы. Невозможно оформить заказ с товаром "{item.product.name}".'
@@ -216,24 +232,44 @@ def order_create_view(request):
         return Response({'error': 'Адрес доставки не найден или не принадлежит пользователю'}, status=status.HTTP_400_BAD_REQUEST)
 
     # Если всё ок, создаём заказ
-    order = Order.objects.create(user=request.user, address=address, status='new')
+    order = Order.objects.create(user=request.user, address=address, status='new') # <-- Статус 'new'
 
     # Создаём OrderItem для каждого товара в корзине
-    # И уменьшаем количество на складе
+    # НЕ УМЕНЬШАЕМ количество на складе пока
     for item in basket_items:
         OrderItem.objects.create(
             order=order,
             product=item.product,
             quantity=item.quantity
         )
-        # Уменьшаем количество товара на складе
-        item.product.quantity -= item.quantity
-        item.product.save()
 
-    # Очищаем корзину
-    basket.items.all().delete()
+    # Генерируем код подтверждения
+    confirmation_code = ''.join(random.choices(string.digits, k=6))
+    expires_at = timezone.now() + timedelta(minutes=15) # Код действует 15 минут
 
-    # Возвращаем информацию о созданном заказе
+    OrderConfirmationCode.objects.create(
+        order=order,
+        code=confirmation_code,
+        expires_at=expires_at
+    )
+
+    # --- Отправка email с кодом подтверждения ---
+
+    subject_client = f'Подтверждение заказа #{order.id}'
+    html_message_client = render_to_string('email/order_confirmation_request.html', {
+        'order': order,
+        'confirmation_code': confirmation_code
+    })
+    plain_message_client = strip_tags(html_message_client)
+    send_mail(
+        subject_client,
+        plain_message_client,
+        None,  # Используем DEFAULT_FROM_EMAIL
+        [request.user.email],  # Email клиента
+        html_message=html_message_client,
+    )
+
+    # Возвращаем информацию о созданном заказе (пока не подтверждён)
     serializer = OrderSerializer(order)
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -430,3 +466,123 @@ def update_order_status_view(request, order_id):
     # Сериализуем и возвращаем обновлённый заказ
     serializer = OrderSerializer(order)
     return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def confirm_order_view(request):
+    order_id = request.data.get('order_id')
+    code = request.data.get('confirmation_code')
+
+    if not order_id or not code:
+        return Response({'error': 'Не указан ID заказа или код подтверждения'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        order = Order.objects.get(id=order_id, user=request.user)
+    except Order.DoesNotExist:
+        return Response({'error': 'Заказ не найден или не принадлежит пользователю'}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        confirmation_code_obj = OrderConfirmationCode.objects.get(order=order)
+    except OrderConfirmationCode.DoesNotExist:
+        return Response({'error': 'Код подтверждения не найден для этого заказа'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if confirmation_code_obj.is_expired():
+        confirmation_code_obj.delete() # Удаляем истёкший код
+        return Response({'error': 'Код подтверждения истёк'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if confirmation_code_obj.code != code:
+        return Response({'error': 'Неверный код подтверждения'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # --- Код верен и не истёк ---
+    # Уменьшаем количество на складе
+    for item in order.items.all():
+        item.product.quantity -= item.quantity
+        item.product.save()
+
+    # Меняем статус заказа
+    order.status = 'confirmed'
+    order.save()
+
+    # Удаляем код подтверждения
+    confirmation_code_obj.delete()
+
+    # Очищаем корзину (если нужно, хотя она уже была "перенесена" в заказ)
+    basket = Basket.objects.get(user=request.user)
+    basket.items.all().delete()
+
+    # Возвращаем информацию о подтверждённом заказе
+    serializer = OrderSerializer(order)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+#востановление пароля
+# --- 1. Запрос на восстановление пароля (отправка письма) ---
+
+class PasswordResetRequestView(View):
+    def post(self, request, *args, **kwargs):
+        data = json.loads(request.body)
+        email = data.get('email')
+
+        if not email:
+            return JsonResponse({'error': 'Email обязателен'}, status=400)
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            # Не сообщаем, существует ли пользователь, для безопасности
+            return JsonResponse({'message': 'Если email существует, письмо с инструкциями отправлено.'}, status=200)
+
+        # Генерируем токен и UID
+        token = default_token_generator.make_token(user)
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+
+        # Формируем ссылку (например, для фронтенда)
+        # В реальном приложении это будет URL вашего фронтенда
+        reset_url = f"http://your-frontend.com/reset-password/{uid}/{token}/"
+
+        # Отправляем письмо
+        subject = 'Сброс пароля'
+        html_message = render_to_string('email/password_reset_email.html', {
+            'user': user,
+            'reset_url': reset_url,
+        })
+        plain_message = strip_tags(html_message)
+        from_email = None  # Используем DEFAULT_FROM_EMAIL
+
+        send_mail(
+            subject,
+            plain_message,
+            from_email,
+            [user.email],
+            html_message=html_message,
+        )
+
+        return JsonResponse({'message': 'Если email существует, письмо с инструкциями отправлено.'}, status=200)
+
+# --- 2. Подтверждение сброса пароля (установка нового пароля) ---
+
+class PasswordResetConfirmView(View):
+    def post(self, request, *args, **kwargs):
+        data = json.loads(request.body)
+        uidb64 = data.get('uid')
+        token = data.get('token')
+        new_password = data.get('new_password')
+
+        if not uidb64 or not token or not new_password:
+            return JsonResponse({'error': 'UID, token и новый пароль обязательны'}, status=400)
+
+        try:
+            uid = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            user = None
+
+        if user is not None and default_token_generator.check_token(user, token):
+            # Устанавливаем новый пароль
+            user.set_password(new_password)
+            user.save()
+            return JsonResponse({'message': 'Пароль успешно изменён'}, status=200)
+        else:
+            return JsonResponse({'error': 'Ссылка для сброса пароля недействительна'}, status=400)

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Подтверждение заказа</title>
+</head>
+<body>
+    <h1>Заказ №{{ order.id }} ожидает подтверждения!</h1>
+    <p>Здравствуйте, {{ order.user.get_full_name|default:order.user.username }}!</p>
+    <p>Для завершения оформления заказа, пожалуйста, введите следующий код подтверждения:</p>
+    <h2>{{ confirmation_code }}</h2>
+    <p>Код действителен в течение 15 минут.</p>
+
+    <h2>Состав заказа:</h2>
+    <ul>
+    {% for item in order.items.all %}
+        <li>{{ item.product.name }} x{{ item.quantity }} - {{ item.product.price }} руб.</li>
+    {% endfor %}
+    </ul>
+
+    <p>Спасибо за заказ!</p>
+</body>
+</html>
