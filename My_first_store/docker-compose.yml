@@ -1,0 +1,43 @@
+services:
+  # База данных PostgreSQL
+  db:
+    image: postgres:14.3-alpine3.15  
+    container_name: procurement_db
+    ports:
+      - "5431:5432"  # <-- Внешний порт 5431 -> внутрь контейнера 5432
+    environment:
+      # Эти переменные будут доступны ВНУТРИ контейнера
+      POSTGRES_USER: ${POSTGRES_USER}        
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}            
+    volumes:
+      # Опционально: сохранение данных БД между перезапусками
+      - postgres_data:/var/lib/postgresql/data # <-- Используем именованный том
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"] # Экранируем $$
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Django-приложение
+  app:
+    build: .  # <-- Собирает образ из Dockerfile в корне
+    container_name: procurement_app
+    ports:
+      - "8000:8000"  # <-- Внешний порт 8000 -> внутрь контейнера 8000 
+    environment:
+      # Эти переменные будут доступны ВНУТРИ контейнера app
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_HOST: db  # <-- Имя сервиса (контейнера) базы данных
+      DB_PORT: 5432  # <-- Порт внутри сети compose (не внешний)
+      # Если у тебя есть другие переменные, добавь их сюда
+      
+    depends_on:
+      db:
+        condition: service_healthy  # <-- Ждёт, пока db не станет healthy
+
+# <-- Вот тут НАДО определить том ГЛОБАЛЬНО
+volumes:
+  postgres_data:  # <-- Определяем именованный том здесь

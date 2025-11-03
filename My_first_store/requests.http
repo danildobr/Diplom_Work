@@ -7,39 +7,32 @@ POST {{host}}/api/auth/register/
 Content-Type: {{contentType}}
 
 {
-  "username": "новый_данил",
+  "username": "началиник1",
   "email": "danil.bore@mail.ru",
   "password": "123",
-  "first_name": "новый участник",
-  "last_name": "Добро",
+  "first_name": "новый",
+  "last_name": "нач",
   "user_type": "client"
 }
 
-# "user_type": "supplier"
-# данил ea3f6a32efa7007801b3bf1f7fbb5f672a0277ce
-# test c59107bec47f61a83b1803bfcff40b52f2ece637
-# Юля c80d31d6a1d069fe97d1f3e1460e290fade7d8eb
-# связной f8f28de615d8fc9518eba84ba63d394531e94995
-# новый данил 9fe2f2133265b28cea898b130e2f8571165f633a
 
 ### === Логин ===
 POST {{host}}/api/auth/login/
 Content-Type: {{contentType}}
 
 {
-  "username": "Данил",
+  "username": "данил",
   "password": "123"
 }
 
 ### === Добавление адреса доставки (требует токен) ===
 POST {{host}}/api/delivery-addresses/
 Content-Type: {{contentType}}
-Authorization: Token 9fe2f2133265b28cea898b130e2f8571165f633a
-# Authorization: Token c59107bec47f61a83b1803bfcff40b52f2ece637
+Authorization: Token 2d588edc82599abdbce4afd871e7a39833c8d687
 
 {
-  "user": 6,
-  "city": "тюмень",
+  "user": 1,
+  "city": "москва",
   "street": "Александра Пушкина ",
   "house": "14",
   "apartment": "55"
@@ -47,7 +40,7 @@ Authorization: Token 9fe2f2133265b28cea898b130e2f8571165f633a
 
 ### === Получение профиля (требует токен) ===
 GET {{host}}/api/auth/profile/
-Authorization: Token 9fe2f2133265b28cea898b130e2f8571165f633a
+Authorization: Token 49640793507a3b00960e927296530adf385abd26
 
 ### === Получение списка товаров ===
 GET {{host}}/api/products/
@@ -57,12 +50,12 @@ GET {{host}}/api/categories/
 
 ### === Получение содержимого корзины (требует токен) ===
 GET {{host}}/api/basket/
-Authorization: Token 9fe2f2133265b28cea898b130e2f8571165f633a
+Authorization: Token 49640793507a3b00960e927296530adf385abd26
 
 ### === Добавление товара в корзину (требует токен) ===
 POST {{host}}/api/basket/add/
 Content-Type: {{contentType}}
-Authorization: Token 9fe2f2133265b28cea898b130e2f8571165f633a
+Authorization: Token 49640793507a3b00960e927296530adf385abd26
 
 {
   "product_id": 25,
@@ -72,15 +65,15 @@ Authorization: Token 9fe2f2133265b28cea898b130e2f8571165f633a
 ### === Оформление заказа (требует токен) ===
 POST {{host}}/api/orders/create/
 Content-Type: {{contentType}}
-Authorization: Token 9fe2f2133265b28cea898b130e2f8571165f633a
+Authorization: Token 2d588edc82599abdbce4afd871e7a39833c8d687
 
 {
-  "delivery_address_id": 12
+  "delivery_address_id": 14
 }
 
 ### === Получение списка заказов (требует токен) ===
 GET {{host}}/api/orders/
-Authorization: Token 9fe2f2133265b28cea898b130e2f8571165f633a
+Authorization: Token 49640793507a3b00960e927296530adf385abd26
 
 ### === Получение списка поставщиков (публичный) ===
 GET {{host}}/api/suppliers/
@@ -96,12 +89,12 @@ Authorization: Token ea3f6a32efa7007801b3bf1f7fbb5f672a0277ce
 
 ###=== удаление из корзины  
 DELETE {{host}}/api/basket/remove/18/
-Authorization: Token 9fe2f2133265b28cea898b130e2f8571165f633a
+Authorization: Token 49640793507a3b00960e927296530adf385abd26
 
 
 ### ===Удалить адрес доствки 
-DELETE {{host}}/api/delivery-addresses/18/
-Authorization: Token 9fe2f2133265b28cea898b130e2f8571165f633a
+DELETE {{host}}/api/delivery-addresses/14/
+Authorization: Token 49640793507a3b00960e927296530adf385abd26
 
 ### === эндпоинт, чтобы поставщик мог изменить это поле через API.
 PUT {{host}}/api/supplier/toggle-accepts-orders/
@@ -109,12 +102,12 @@ Content-Type: {{contentType}}
 Authorization:Token f8f28de615d8fc9518eba84ba63d394531e94995
 
 {
-  "accepts_orders": false
+  "accepts_orders": true
 }
 
 ### === Получать список оформленных заказов, только для поставщиков
 GET {{host}}/api/supplier/orders/
-Authorization: Token 9fe2f2133265b28cea898b130e2f8571165f633a
+Authorization: Token f8f28de615d8fc9518eba84ba63d394531e94995
 
 
 ### == эндпоинт, через который поставщик сможет загружать/обновлять свои товары в базу данных через API
@@ -162,27 +155,9 @@ Authorization: Token d69a3c83a6ee8184807758225e5a48f93477307c
 ### === Подтверждение заказа (ввод кода)
 POST {{host}}/api/orders/confirm/
 Content-Type: {{contentType}}
-Authorization: Token 9fe2f2133265b28cea898b130e2f8571165f633a
+Authorization: Token f8f28de615d8fc9518eba84ba63d394531e94995
 
 {
   "order_id": 13,
   "confirmation_code": "946194"  
   }
-
-####=== восстановлени пароля
-POST {{host}}/api/auth/password-reset/
-Content-Type: application/json
-
-{
-  "email": "bore@mail.ru"
-}
-
-####
-POST {{host}}/api/auth/password-reset-confirm/
-Content-Type: application/json
-
-{
-  "uid": "dGVzdHVzZXI=",        // <-- Это urlsafe_base64_encode(user.pk)
-  "token": "abc123def456...",   // <-- Это токен из ссылки
-  "new_password": "my_new_strong_password_123"
-}
