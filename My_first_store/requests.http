@@ -91,7 +91,6 @@ Authorization: Token ea3f6a32efa7007801b3bf1f7fbb5f672a0277ce
 DELETE {{host}}/api/basket/remove/18/
 Authorization: Token 49640793507a3b00960e927296530adf385abd26
 
-
 ### ===Удалить адрес доствки 
 DELETE {{host}}/api/delivery-addresses/14/
 Authorization: Token 49640793507a3b00960e927296530adf385abd26
@@ -108,7 +107,6 @@ Authorization:Token f8f28de615d8fc9518eba84ba63d394531e94995
 ### === Получать список оформленных заказов, только для поставщиков
 GET {{host}}/api/supplier/orders/
 Authorization: Token f8f28de615d8fc9518eba84ba63d394531e94995
-
 
 ### == эндпоинт, через который поставщик сможет загружать/обновлять свои товары в базу данных через API
 POST {{host}}/api/supplier/upload-price/
@@ -140,7 +138,6 @@ Authorization: Token f8f28de615d8fc9518eba84ba63d394531e94995
     }
   ]
 }
-
 
 ###=== изменение статуса заказа для АДМИНА
 PUT {{host}}/api/orders/1/status/
