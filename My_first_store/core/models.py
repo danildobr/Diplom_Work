@@ -4,24 +4,27 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator
 from django.conf import settings
+
 # Типы пользователей
 USER_TYPE_CHOICES = (
-    ('client', 'Клиент'),
-    ('supplier', 'Поставщик'),
+    ("client", "Клиент"),
+    ("supplier", "Поставщик"),
 )
 
 ORDER_STATUS_CHOICES = (
-    ('new', 'Новый'),
-    ('confirmed', 'Подтверждён'),
-    ('assembled', 'Собран'),
-    ('sent', 'Отправлен'),
-    ('delivered', 'Доставлен'),
-    ('canceled', 'Отменён'),
+    ("new", "Новый"),
+    ("confirmed", "Подтверждён"),
+    ("assembled", "Собран"),
+    ("sent", "Отправлен"),
+    ("delivered", "Доставлен"),
+    ("canceled", "Отменён"),
 )
 
 
 class User(AbstractUser):
-    user_type = models.CharField(max_length=10, choices=USER_TYPE_CHOICES, default='client')
+    user_type = models.CharField(
+        max_length=10, choices=USER_TYPE_CHOICES, default="client"
+    )
     email = models.EmailField(unique=True)
 
     def __str__(self):
@@ -29,7 +32,9 @@ class User(AbstractUser):
 
 
 class Supplier(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='supplier_profile')
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="supplier_profile"
+    )
     name = models.CharField(max_length=255, verbose_name="Название компании")
     accepts_orders = models.BooleanField(default=True, verbose_name="Принимает заказы")
 
@@ -50,14 +55,22 @@ class Category(models.Model):
 
 class Product(models.Model):
     name = models.CharField(max_length=255)
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='products')
-    supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name='products')
-    price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
+    category = models.ForeignKey(
+        Category, on_delete=models.CASCADE, related_name="products"
+    )
+    supplier = models.ForeignKey(
+        Supplier, on_delete=models.CASCADE, related_name="products"
+    )
+    price = models.DecimalField(
+        max_digits=10, decimal_places=2, validators=[MinValueValidator(0)]
+    )
     quantity = models.PositiveIntegerField(default=0)
-    external_id = models.CharField(max_length=255, blank=True, null=True, help_text="ID из прайса поставщика")
+    external_id = models.CharField(
+        max_length=255, blank=True, null=True, help_text="ID из прайса поставщика"
+    )
 
     class Meta:
-        unique_together = ('supplier', 'external_id')  # чтобы не дублировать импорт
+        unique_together = ("supplier", "external_id")  # чтобы не дублировать импорт
 
     def __str__(self):
         return f"{self.name} ({self.supplier.name})"
@@ -71,19 +84,21 @@ class Parameter(models.Model):
 
 
 class ProductParameter(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='parameters')
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="parameters"
+    )
     parameter = models.ForeignKey(Parameter, on_delete=models.CASCADE)
     value = models.TextField()
 
     class Meta:
-        unique_together = ('product', 'parameter')
+        unique_together = ("product", "parameter")
 
     def __str__(self):
         return f"{self.parameter.name}: {self.value}"
 
 
 class DeliveryAddress(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='addresses')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="addresses")
     city = models.CharField(max_length=100)
     street = models.CharField(max_length=255)
     house = models.CharField(max_length=20)
@@ -94,9 +109,11 @@ class DeliveryAddress(models.Model):
 
 
 class Order(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="orders")
     address = models.ForeignKey(DeliveryAddress, on_delete=models.SET_NULL, null=True)
-    status = models.CharField(max_length=20, choices=ORDER_STATUS_CHOICES, default='new')
+    status = models.CharField(
+        max_length=20, choices=ORDER_STATUS_CHOICES, default="new"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -105,40 +122,42 @@ class Order(models.Model):
 
 
 class OrderItem(models.Model):
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
 
     class Meta:
-        unique_together = ('order', 'product')
+        unique_together = ("order", "product")
 
     def __str__(self):
         return f"{self.product.name} x{self.quantity}"
-    
-    
+
+
 class Basket(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='basket')
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="basket")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"Корзина {self.user.username}"
 
+
 class BasketItem(models.Model):
-    basket = models.ForeignKey(Basket, on_delete=models.CASCADE, related_name='items')
+    basket = models.ForeignKey(Basket, on_delete=models.CASCADE, related_name="items")
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=1)
 
     class Meta:
-        unique_together = ('basket', 'product')  # Один товар — один раз в корзине
+        unique_together = ("basket", "product")  # Один товар — один раз в корзине
 
     def __str__(self):
         return f"{self.quantity}x {self.product.name}"
-    
 
 
 class OrderConfirmationCode(models.Model):
-    order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name='confirmation_code')
+    order = models.OneToOneField(
+        Order, on_delete=models.CASCADE, related_name="confirmation_code"
+    )
     code = models.CharField(max_length=6)  # Простой 6-значный код
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
@@ -147,7 +166,7 @@ class OrderConfirmationCode(models.Model):
         return timezone.now() > self.expires_at
 
     def __str__(self):
-        return f'Код для заказа {self.order.id} (до {self.expires_at})'
+        return f"Код для заказа {self.order.id} (до {self.expires_at})"
 
     class Meta:
         verbose_name = "Код подтверждения заказа"
